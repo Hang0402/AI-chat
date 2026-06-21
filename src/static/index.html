@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Roleplay AI</title>
 <style>
 :root { --bg:#f0f2f5; --header:#1a1a2e; --bubble-me:#d4fcd7; --bubble-you:#fff; --accent:#6c5ce7; --text:#1a1a2e; --muted:#8e8e93; --border:#e5e5ea; }
@@ -82,7 +82,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   <div id="charList"></div>
   <div class="distill-panel">
     <h3>Distill New Character</h3>
-    <select id="distillType" onchange="toggleDistillUI()"><option value="text">From Text</option><option value="url">From URL</option><option value="search">From Search</option></select>
+    <select id="distillType" title="Source type" aria-label="Distillation source type" onchange="toggleDistillUI()"><option value="text">From Text</option><option value="url">From URL</option><option value="search">From Search</option></select>
     <input type="text" id="distillUrl" placeholder="Paste URL..." style="display:none">
     <textarea id="distillContent" placeholder="Paste character description..."></textarea>
     <button onclick="distill()">Distill</button>
@@ -93,10 +93,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   <div class="header">
     <div class="avatar-wrap"><div class="avatar" id="headerAvatar"><span id="headerEmoji" style="font-size:22px">AI</span></div><div class="online-dot" id="onlineDot" style="display:none"></div></div>
     <div class="info"><div class="name" id="charName">Select a character</div><div class="status" id="charStatus">open menu to start</div></div>
-    <div class="actions"><button onclick="toggleSidebar()">&#9776;</button><button onclick="resetChat()">&#8635;</button></div>
+    <div class="actions"><button onclick="toggleSidebar()" title="Menu" aria-label="Toggle sidebar">&#9776;</button><button onclick="resetChat()" title="Reset" aria-label="Reset chat">&#8635;</button></div>
   </div>
   <div class="messages" id="messages"><div class="welcome" id="welcomeCard"><div class="big-avatar">&#x1F3AD;</div><h2>Roleplay AI</h2><p>Choose a character from the menu to start chatting</p></div></div>
-  <div class="input-area"><input type="text" id="inputBox" placeholder="Type a message..." onkeydown="if(event.key==='Enter')send()"><button onclick="send()">&#10148;</button></div>
+  <div class="input-area"><input type="text" id="inputBox" placeholder="Type a message..." onkeydown="if(event.key==='Enter')send()"><button onclick="send()" title="Send" aria-label="Send message">&#10148;</button></div>
 </div>
 <script>
 var ws, currentCharId = null, currentStreamBubble = null, charIdx = 0;
@@ -112,7 +112,7 @@ function makeEmojiAvatar(name,idx){
   return '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+c1+','+c2+')"></div><span style="position:relative;z-index:1;font-size:18px">'+EMOJIS[idx%EMOJIS.length]+'</span>';
 }
 function makeAvatar(name,idx,avatarUrl){
-  if(avatarUrl) return '<div style="position:absolute;inset:0;border-radius:50%;overflow:hidden;z-index:1"><img src="'+avatarUrl+'" style="width:100%;height:100%;object-fit:cover"></div>';
+  if(avatarUrl) return '<div style="position:absolute;inset:0;border-radius:50%;overflow:hidden;z-index:1"><img alt="character avatar" src="'+avatarUrl+'" style="width:100%;height:100%;object-fit:cover"></div>';
   return makeEmojiAvatar(name,idx);
 }
 
