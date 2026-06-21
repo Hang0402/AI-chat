@@ -6,7 +6,10 @@ import re
 from pathlib import Path
 
 import requests
-
+import hashlib
+import io
+import base64
+from PIL import Image, ImageDraw, ImageFont
 DISTILL_PROMPT = """\
 You are a character analyst. Extract a detailed roleplay character card from the provided text.
 Output ONLY valid JSON, no markdown fences. Use this exact structure:
@@ -45,7 +48,14 @@ class CharacterDistiller:
         text = self._scrape(url)
         if not text:
             return {"error": "Failed to scrape content"}
-        return self.distill_from_text(text, source_url=url)
+        result = self.distill_from_text(text, source_url=url)
+        if "error" not in result:
+            try:
+                avatar_path = self._generate_avatar(result.get("name", "unknown"))
+                result["avatar"] = avatar_path.replace("\\", "/")
+            except:
+                pass
+        return result
 
     def distill_from_text(self, text, source_url=""):
         """Distill character card from raw text."""
@@ -57,21 +67,62 @@ class CharacterDistiller:
         card = self._parse(raw)
         if source_url:
             card["source_url"] = source_url
+        if "error" not in card:
+            try:
+                avatar_path = self._generate_avatar(card.get("name", "unknown"))
+                card["avatar"] = avatar_path.replace("\\", "/")
+            except:
+                pass
         return card
 
     def distill_from_search(self, query):
-        """Search the web and distill from top results. Uses DuckDuckGo."""
+        """Search the web and distill from top results. Falls back to LLM knowledge."""
+        # Try DuckDuckGo first
+        text = ""
         try:
             results = self._search_ddg(query, max_results=3)
-        except Exception as e:
-            return {"error": f"Search failed: {e}"}
-        if not results:
-            return {"error": "No search results found"}
-        # Combine snippets
-        combined = "\n\n".join(
-            f"Source: {r['title']}\n{r['snippet']}" for r in results
+            if results:
+                text = "\n\n".join(
+                    f"Source: {r['title']}\n{r['snippet']}" for r in results
+                )
+        except Exception:
+            pass
+
+        if not text or len(text) < 50:
+            # Fallback: ask LLM to describe the character from its own knowledge
+            text = self._llm_knowledge(query)
+
+        result = self.distill_from_text(text)
+        if "error" not in result:
+            try:
+                avatar_path = self._generate_avatar(result.get("name", "unknown"))
+                result["avatar"] = avatar_path.replace("\\", "/")
+            except Exception as e:
+                print(f"Avatar generation skipped: {e}")
+        return result
+
+    def _llm_knowledge(self, query):
+        """Ask the LLM to describe a known character/persona."""
+        prompt = f"Describe the character '{query}' in detail. Include: personality, appearance, speaking style, background, likes/dislikes. Write 3-5 paragraphs as if writing a character wiki entry. Output plain text only."
+        resp = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": "You are a character encyclopedia. Describe characters in detail."},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.7,
+                "max_tokens": 1024,
+            },
+            timeout=60,
         )
-        return self.distill_from_text(combined)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
 
     def _scrape(self, url):
         headers = {
@@ -121,6 +172,67 @@ class CharacterDistiller:
             results.append({"title": title, "snippet": snippet})
         return results
 
+
+    def _generate_avatar(self, name, output_dir="avatars"):
+        """Generate a styled initial avatar for the character and return the path."""
+        import random
+        # Use hashlib for deterministic-ish color based on name
+        h = int(hashlib.md5(name.encode()).hexdigest(), 16)
+        hue1 = h % 360
+        hue2 = (hue1 + 40) % 360
+        
+        # Create a 200x200 image
+        size = 200
+        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        # Gradient background
+        grad = Image.new("RGBA", (size, size))
+        for y in range(size):
+            ratio = y / size
+            r = int(((hue2 % 360) / 360 * 255 * (1 - ratio) + (hue1 % 360) / 360 * 255 * ratio) % 255)
+            g = int((((hue2 + 120) % 360) / 360 * 255 * (1 - ratio) + ((hue1 + 120) % 360) / 360 * 255 * ratio) % 255)
+            b = int((((hue2 + 240) % 360) / 360 * 255 * (1 - ratio) + ((hue1 + 240) % 360) / 360 * 255 * ratio) % 255)
+            for x in range(size):
+                grad.putpixel((x, y), (r, g, b, 255))
+        
+        # Round corners with a mask
+        mask = Image.new("L", (size, size), 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.ellipse((0, 0, size, size), fill=255)
+        
+        # Apply mask
+        result = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        result.paste(grad, (0, 0), mask)
+        
+        # Draw first character of name
+        char = name[0] if name else "?"
+        # Try to use a font that supports Chinese
+        font_size = 90
+        try:
+            font = ImageFont.truetype("C:/Windows/Fonts/msyh.ttc", font_size)
+        except:
+            try:
+                font = ImageFont.truetype("C:/Windows/Fonts/simhei.ttf", font_size)
+            except:
+                font = ImageFont.load_default()
+        
+        bbox = draw.textbbox((0, 0), char, font=font)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        x = (size - tw) / 2 - bbox[0]
+        y = (size - th) / 2 - bbox[1]
+        draw.text((x, y), char, fill=(255, 255, 255, 255), font=font)
+        result = Image.alpha_composite(result, img)
+        
+        # Save
+        out_path = Path(output_dir)
+        out_path.mkdir(parents=True, exist_ok=True)
+        safe_name = re.sub(r"[^\w\-]", "_", name)
+        fname = f"{safe_name}_auto.png"
+        fpath = out_path / fname
+        result.save(fpath, "PNG")
+        return str(fpath)
+
     def _call_llm(self, prompt):
         resp = requests.post(
             f"{self.base_url}/chat/completions",
@@ -151,9 +263,11 @@ class CharacterDistiller:
             return {"raw_output": raw, "error": "JSON parse failed"}
 
     def save_character(self, card, output_dir="characters"):
+        """Save character card. If avatar path is in card, copy/reference it."""
         path = Path(output_dir)
         path.mkdir(parents=True, exist_ok=True)
         name = card.get("name", "unknown").replace(" ", "_")
-        filepath = path / f"{name}.json"
+        safe_name = re.sub(r"[^\w\-]", "_", name)
+        filepath = path / f"{safe_name}.json"
         filepath.write_text(json.dumps(card, ensure_ascii=False, indent=2), encoding="utf-8")
         return filepath
