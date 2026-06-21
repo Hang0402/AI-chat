@@ -204,6 +204,14 @@ function loadCharacters(){
   });
 }
 
+
+function deleteAvatar(id){
+  if(!confirm("Remove avatar for this character?"))return;
+  fetch("/api/character/avatar/"+encodeURIComponent(id),{method:"DELETE"})
+    .then(function(r){return r.json();})
+    .then(function(d){if(d.ok){localStorage.removeItem("avt_"+id);loadCharacters();}});
+}
+
 function uploadAvatar(id,input){
   var file=input.files[0];if(!file)return;
   var form=new FormData();form.append("file",file);

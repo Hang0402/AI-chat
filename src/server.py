@@ -110,6 +110,36 @@ async def upload_avatar(char_id: str, file: UploadFile = File(...)):
     return {"ok": True, "avatar_url": f"/{card['avatar']}"}
 
 
+
+@app.delete("/api/character/avatar/{char_id}")
+async def delete_avatar(char_id: str):
+    """Delete a character's avatar and revert to default."""
+    card_path = Path(f"characters/{char_id}.json")
+    # Delete all avatar files for this character
+    avatars_dir = Path("avatars")
+    deleted = False
+    for f in avatars_dir.glob(f"{char_id}.*"):
+        f.unlink()
+        deleted = True
+    for f in avatars_dir.glob(f"auto_*.png"):
+        # Check if this auto avatar belongs to this character
+        pass  # We don't know which hash belongs to which char, skip for now
+    
+    # Update character card
+    if card_path.exists():
+        card = json.loads(card_path.read_text(encoding="utf-8"))
+        old_avatar = card.get("avatar", "")
+        card["avatar"] = ""
+        card_path.write_text(json.dumps(card, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Delete the old avatar file
+        if old_avatar:
+            old_path = Path(old_avatar)
+            if old_path.exists():
+                old_path.unlink()
+                deleted = True
+    return {"ok": True, "deleted": deleted}
+
+
 @app.websocket("/ws/chat")
 async def websocket_chat(ws: WebSocket):
     await ws.accept()
