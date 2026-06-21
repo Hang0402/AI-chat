@@ -73,6 +73,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 
 @keyframes msgIn{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
 @keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+.del-avt{color:#e74c3c;font-size:10px;cursor:pointer;margin-left:4px;opacity:.6;transition:opacity .2s}.del-avt:hover{opacity:1}
 </style>
 </head>
 <body>
@@ -198,7 +199,7 @@ function loadCharacters(){
       html+='<div class="cc-avatar" style="position:relative">'+makeAvatar(c.name,i,c.avatar_url)+'</div>';
       html+='<div class="cc-info"><div class="cc-name">'+esc(c.name)+'</div>';
       html+='<div class="cc-tags">'+esc((c.personality||[]).join(" / "))+'</div></div>';
-      html+='<div class="cc-upload"><input type="file" accept="image/*" style="display:none" id="file_'+esc(c.id)+'" onchange="uploadAvatar(\''+esc(c.id)+'\'',this)"><label for="file_'+esc(c.id)+'" style="cursor:pointer;font-size:10px;color:#6c5ce7">+ Avatar</label>';if(c.avatar_url)html+=' <span onclick="event.stopPropagation();deleteAvatar(\''+esc(c.id)+'\')" style="cursor:pointer;font-size:10px;color:#e74c3c;margin-left:4px" title="Remove avatar">✕</span>';html+='</div></div>';
+      html+='<div class="cc-upload"><input type="file" accept="image/*" style="display:none" id="file_'+esc(c.id)+'" onchange="uploadAvatar(\''+esc(c.id)+'\'',this)"><label for="file_'+esc(c.id)+'" style="cursor:pointer;font-size:10px;color:#6c5ce7">+ Avatar</label>';if(c.avatar_url)html+=' <span class="del-avt" onclick="event.stopPropagation();deleteAvatar(\''+esc(c.id)+'\')" title="Remove avatar">✕</span>';html+='</div></div>';
     }
     document.getElementById("charList").innerHTML=html;
   });
