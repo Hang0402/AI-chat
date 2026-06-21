@@ -10,6 +10,8 @@ import hashlib
 import io
 import base64
 from PIL import Image, ImageDraw, ImageFont
+import colorsys
+
 DISTILL_PROMPT = """\
 You are a character analyst. Extract a detailed roleplay character card from the provided text.
 Output ONLY valid JSON, no markdown fences. Use this exact structure:
@@ -59,7 +61,6 @@ class CharacterDistiller:
 
     def distill_from_text(self, text, source_url=""):
         """Distill character card from raw text."""
-        # Truncate if too long
         if len(text) > 8000:
             text = text[:8000] + "..."
         prompt = DISTILL_PROMPT.replace("__TEXT__", text)
@@ -77,7 +78,6 @@ class CharacterDistiller:
 
     def distill_from_search(self, query):
         """Search the web and distill from top results. Falls back to LLM knowledge."""
-        # Try DuckDuckGo first
         text = ""
         try:
             results = self._search_ddg(query, max_results=3)
@@ -89,7 +89,6 @@ class CharacterDistiller:
             pass
 
         if not text or len(text) < 50:
-            # Fallback: ask LLM to describe the character from its own knowledge
             text = self._llm_knowledge(query)
 
         result = self.distill_from_text(text)
@@ -131,14 +130,10 @@ class CharacterDistiller:
         try:
             resp = requests.get(url, headers=headers, timeout=15)
             resp.raise_for_status()
-            # Simple HTML text extraction
             html = resp.text
-            # Remove scripts and styles
             html = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL)
             html = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL)
-            # Remove tags
             text = re.sub(r"<[^>]+>", " ", html)
-            # Collapse whitespace
             text = re.sub(r"\s+", " ", text).strip()
             return text[:10000]
         except Exception as e:
@@ -155,9 +150,7 @@ class CharacterDistiller:
             timeout=10,
         )
         resp.raise_for_status()
-        # Parse results
         results = []
-        # Simple regex extraction
         snippets = re.findall(
             r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>',
             resp.text, re.DOTALL
@@ -172,63 +165,63 @@ class CharacterDistiller:
             results.append({"title": title, "snippet": snippet})
         return results
 
-
     def _generate_avatar(self, name, output_dir="avatars"):
-        """Generate a styled initial avatar for the character and return the path."""
-        import random
-        # Use hashlib for deterministic-ish color based on name
+        """Generate a styled initial avatar with Chinese character and gradient circle."""
         h = int(hashlib.md5(name.encode()).hexdigest(), 16)
         hue1 = h % 360
-        hue2 = (hue1 + 40) % 360
-        
-        # Create a 200x200 image
-        size = 200
-        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        
-        # Gradient background
+        hue2 = (hue1 + 60) % 360
+
+        size = 256
         grad = Image.new("RGBA", (size, size))
         for y in range(size):
-            ratio = y / size
-            r = int(((hue2 % 360) / 360 * 255 * (1 - ratio) + (hue1 % 360) / 360 * 255 * ratio) % 255)
-            g = int((((hue2 + 120) % 360) / 360 * 255 * (1 - ratio) + ((hue1 + 120) % 360) / 360 * 255 * ratio) % 255)
-            b = int((((hue2 + 240) % 360) / 360 * 255 * (1 - ratio) + ((hue1 + 240) % 360) / 360 * 255 * ratio) % 255)
             for x in range(size):
-                grad.putpixel((x, y), (r, g, b, 255))
-        
-        # Round corners with a mask
+                ratio = y / size
+                h_mix = (hue1 + (hue2 - hue1) * ratio) % 360
+                r, g, b = colorsys.hls_to_rgb(h_mix / 360, 0.55, 0.70)
+                grad.putpixel((x, y), (int(r * 255), int(g * 255), int(b * 255), 255))
+
         mask = Image.new("L", (size, size), 0)
         mask_draw = ImageDraw.Draw(mask)
-        mask_draw.ellipse((0, 0, size, size), fill=255)
-        
-        # Apply mask
+        padding = 4
+        mask_draw.ellipse((padding, padding, size - padding, size - padding), fill=255)
+
         result = Image.new("RGBA", (size, size), (0, 0, 0, 0))
         result.paste(grad, (0, 0), mask)
-        
-        # Draw first character of name
+
         char = name[0] if name else "?"
-        # Try to use a font that supports Chinese
-        font_size = 90
-        try:
-            font = ImageFont.truetype("C:/Windows/Fonts/msyh.ttc", font_size)
-        except:
+        text_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        text_draw = ImageDraw.Draw(text_layer)
+
+        font_paths = [
+            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/msyhbd.ttc",
+            "C:/Windows/Fonts/simhei.ttf",
+        ]
+        font = None
+        for fp in font_paths:
             try:
-                font = ImageFont.truetype("C:/Windows/Fonts/simhei.ttf", font_size)
+                font = ImageFont.truetype(fp, 130)
+                break
             except:
-                font = ImageFont.load_default()
-        
-        bbox = draw.textbbox((0, 0), char, font=font)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                continue
+        if font is None:
+            font = ImageFont.load_default()
+
+        bbox = text_draw.textbbox((0, 0), char, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
         x = (size - tw) / 2 - bbox[0]
         y = (size - th) / 2 - bbox[1]
-        draw.text((x, y), char, fill=(255, 255, 255, 255), font=font)
-        result = Image.alpha_composite(result, img)
-        
-        # Save
+
+        text_draw.text((x + 3, y + 3), char, fill=(0, 0, 0, 50), font=font)
+        text_draw.text((x, y), char, fill=(255, 255, 255, 255), font=font)
+
+        result = Image.alpha_composite(result, text_layer)
+
         out_path = Path(output_dir)
         out_path.mkdir(parents=True, exist_ok=True)
-        safe_name = re.sub(r"[^\w\-]", "_", name)
-        fname = f"{safe_name}_auto.png"
+        safe_id = hashlib.md5(name.encode()).hexdigest()[:8]
+        fname = f"auto_{safe_id}.png"
         fpath = out_path / fname
         result.save(fpath, "PNG")
         return str(fpath)
