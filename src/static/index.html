@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Roleplay AI</title>
+<style>
+:root {
+  --bg: #ededed;
+  --header-bg: #2e2e2e;
+  --bubble-me: #95ec69;
+  --bubble-you: #fff;
+  --text: #111;
+  --muted: #888;
+  --accent: #07c160;
+  --input-bg: #f7f7f7;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  height: 100vh; display: flex; justify-content: center; align-items: center;
+}
+.app {
+  width: 100%; max-width: 420px; height: 100vh; max-height: 780px;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  border-radius: 0;
+  overflow: hidden;
+  box-shadow: 0 0 30px rgba(0,0,0,0.1);
+}
+@media (min-width: 500px) {
+  .app { border-radius: 12px; height: 90vh; }
+}
+.header {
+  background: var(--header-bg); color: #fff;
+  padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+}
+.header .avatar {
+  width: 38px; height: 38px; border-radius: 6px;
+  background: linear-gradient(135deg, #f093fb, #f5576c);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.header .info { flex: 1; min-width: 0; }
+.header .name { font-size: 16px; font-weight: 600; }
+.header .status { font-size: 11px; color: #aaa; }
+.header .actions { display: flex; gap: 8px; }
+.header .actions button {
+  background: none; border: none; color: #fff; font-size: 20px;
+  cursor: pointer; padding: 4px 8px; border-radius: 4px;
+}
+.header .actions button:hover { background: rgba(255,255,255,0.15); }
+
+.messages {
+  flex: 1; overflow-y: auto; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--bg);
+}
+.message {
+  display: flex; flex-direction: column; max-width: 75%;
+  animation: fadeIn 0.3s ease;
+}
+.message.me { align-self: flex-end; }
+.message.you { align-self: flex-start; }
+.message .bubble {
+  padding: 10px 14px; border-radius: 8px;
+  font-size: 15px; line-height: 1.5; word-break: break-word;
+  position: relative;
+}
+.message.me .bubble {
+  background: var(--bubble-me); color: #000;
+  border-top-right-radius: 2px;
+}
+.message.you .bubble {
+  background: var(--bubble-you); color: var(--text);
+  border-top-left-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.message .time {
+  font-size: 10px; color: var(--muted); margin-top: 3px;
+}
+.message.me .time { text-align: right; }
+.typing { padding: 4px 14px; }
+.typing .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #bbb; margin: 0 2px; animation: bounce 1.4s infinite; }
+.typing .dot:nth-child(2) { animation-delay: 0.2s; }
+.typing .dot:nth-child(3) { animation-delay: 0.4s; }
+
+.input-area {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; background: var(--input-bg);
+  border-top: 1px solid #ddd;
+}
+.input-area input {
+  flex: 1; padding: 10px 14px;
+  border: none; border-radius: 20px;
+  font-size: 15px; outline: none;
+  background: #fff;
+}
+.input-area button {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--accent); color: #fff; border: none;
+  font-size: 18px; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.input-area button:hover { opacity: 0.85; }
+
+.sidebar {
+  position: fixed; top: 0; left: 0; width: 260px; height: 100vh;
+  background: #fff; z-index: 100; transform: translateX(-100%);
+  transition: transform 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  padding: 16px; overflow-y: auto;
+}
+.sidebar.open { transform: translateX(0); }
+.sidebar h3 { font-size: 14px; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+.sidebar .char-card {
+  padding: 10px; border-radius: 8px; cursor: pointer;
+  margin-bottom: 6px; border: 1px solid #eee;
+  transition: background 0.2s;
+}
+.sidebar .char-card:hover { background: #f5f5f5; }
+.sidebar .char-card.active { background: #e8f5e9; border-color: var(--accent); }
+.sidebar .char-card .cname { font-size: 15px; font-weight: 600; }
+.sidebar .char-card .cdesc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.distill-panel {
+  border-top: 1px solid #eee; margin-top: 16px; padding-top: 16px;
+}
+.distill-panel textarea {
+  width: 100%; height: 80px; font-size: 12px; padding: 8px;
+  border: 1px solid #ddd; border-radius: 6px; resize: vertical;
+  font-family: inherit;
+}
+.distill-panel input[type=text] {
+  width: 100%; font-size: 12px; padding: 8px; margin-bottom: 6px;
+  border: 1px solid #ddd; border-radius: 6px;
+}
+.distill-panel select {
+  width: 100%; font-size: 12px; padding: 6px; margin-bottom: 6px;
+  border: 1px solid #ddd; border-radius: 6px;
+}
+.distill-panel button {
+  width: 100%; padding: 8px; background: var(--accent);
+  color: #fff; border: none; border-radius: 6px; cursor: pointer;
+  font-size: 13px; margin-top: 4px;
+}
+.distill-panel .result {
+  font-size: 11px; color: var(--muted); margin-top: 6px; max-height: 100px; overflow-y: auto;
+}
+
+.overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.3); z-index: 99;
+  display: none;
+}
+.overlay.show { display: block; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+</style>
+</head>
+<body>
+
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<div class="sidebar" id="sidebar">
+  <h3>Characters</h3>
+  <div id="charList"></div>
+  <div class="distill-panel">
+    <h3 style="margin-bottom:8px;">Distill New Character</h3>
+    <select id="distillType" onchange="toggleDistillInput()">
+      <option value="text">From Text</option>
+      <option value="url">From URL</option>
+      <option value="search">From Search</option>
+    </select>
+    <input type="text" id="distillUrl" placeholder="https://..." style="display:none">
+    <textarea id="distillContent" placeholder="Paste character description, dialogue, or backstory..."></textarea>
+    <button onclick="distill()">Distill</button>
+    <div class="result" id="distillResult"></div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="header">
+    <div class="avatar" id="avatarIcon">AI</div>
+    <div class="info">
+      <div class="name" id="charName">Select a character</div>
+      <div class="status" id="charStatus">offline</div>
+    </div>
+    <div class="actions">
+      <button onclick="toggleSidebar()" title="Characters">&#9776;</button>
+      <button onclick="resetChat()" title="Reset">&#8635;</button>
+    </div>
+  </div>
+
+  <div class="messages" id="messages">
+    <div class="message you">
+      <div class="bubble">Hello~ Choose a character from the menu to start chatting!</div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <input type="text" id="inputBox" placeholder="Type a message..." onkeydown="if(event.key==='Enter')send()">
+    <button onclick="send()">&#10148;</button>
+  </div>
+</div>
+
+<script>
+let ws;
+let currentStreamBubble = null;
+
+function connect() {
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(protocol + "//" + location.host + "/ws/chat");
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === "chunk") {
+      if (!currentStreamBubble) {
+        removeTyping();
+        currentStreamBubble = addBubble("you", "", true);
+      }
+      currentStreamBubble.querySelector(".bubble").textContent += data.content;
+      scrollBottom();
+    } else if (data.type === "done") {
+      currentStreamBubble = null;
+    } else if (data.type === "loaded") {
+      document.getElementById("charName").textContent = data.name;
+      document.getElementById("charStatus").textContent = "online";
+      if (data.greeting) {
+        addBubble("you", data.greeting);
+      }
+    } else if (data.type === "reset") {
+      document.getElementById("messages").innerHTML = "";
+      addBubble("you", "Chat reset.");
+    }
+  };
+  ws.onclose = () => {
+    document.getElementById("charStatus").textContent = "reconnecting...";
+    setTimeout(connect, 2000);
+  };
+  ws.onopen = () => {
+    document.getElementById("charStatus").textContent = "online";
+    loadCharacters();
+  };
+}
+
+function send() {
+  const input = document.getElementById("inputBox");
+  const msg = input.value.trim();
+  if (!msg || !ws || ws.readyState !== 1) return;
+  addBubble("me", msg);
+  input.value = "";
+  addTyping();
+  ws.send(JSON.stringify({ type: "chat", message: msg }));
+}
+
+function addBubble(side, text, streaming) {
+  const div = document.createElement("div");
+  div.className = "message " + side;
+  div.innerHTML = '<div class="bubble">' + escapeHtml(text) + '</div>' +
+    (streaming ? "" : '<div class="time">' + now() + '</div>');
+  document.getElementById("messages").appendChild(div);
+  scrollBottom();
+  return div;
+}
+
+function addTyping() {
+  const div = document.createElement("div");
+  div.className = "message you typing-indicator";
+  div.innerHTML = '<div class="bubble typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>';
+  document.getElementById("messages").appendChild(div);
+  scrollBottom();
+}
+
+function removeTyping() {
+  const t = document.querySelector(".typing-indicator");
+  if (t) t.remove();
+}
+
+function scrollBottom() {
+  const m = document.getElementById("messages");
+  setTimeout(() => m.scrollTop = m.scrollHeight, 50);
+}
+
+function now() {
+  const d = new Date();
+  return d.getHours().toString().padStart(2,"0") + ":" + d.getMinutes().toString().padStart(2,"0");
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("open");
+  document.getElementById("overlay").classList.toggle("show");
+}
+
+function toggleDistillInput() {
+  const t = document.getElementById("distillType").value;
+  document.getElementById("distillUrl").style.display = t === "url" ? "block" : "none";
+  document.getElementById("distillContent").style.display = t === "search" ? "none" : "block";
+  if (t === "search") {
+    document.getElementById("distillContent").style.display = "block";
+    document.getElementById("distillContent").placeholder = "Search query, e.g. 'Hatsune Miku character personality'";
+  }
+}
+
+function resetChat() {
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type: "reset" }));
+  }
+}
+
+function loadCharacters() {
+  fetch("/api/characters")
+    .then(r => r.json())
+    .then(chars => {
+      const list = document.getElementById("charList");
+      list.innerHTML = "";
+      chars.forEach(c => {
+        const div = document.createElement("div");
+        div.className = "char-card";
+        div.innerHTML = '<div class="cname">' + c.name + '</div><div class="cdesc">' + (c.personality || []).join(", ") + '</div>';
+        div.onclick = () => loadChar(c.id);
+        list.appendChild(div);
+      });
+    });
+}
+
+function loadChar(id) {
+  fetch("/api/character/load/" + id, { method: "POST" })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        document.getElementById("messages").innerHTML = "";
+        addBubble("you", data.greeting);
+        document.getElementById("charName").textContent = data.name;
+        document.getElementById("charStatus").textContent = "online";
+        toggleSidebar();
+      }
+    });
+}
+
+async function distill() {
+  const type = document.getElementById("distillType").value;
+  let content;
+  if (type === "url") {
+    content = document.getElementById("distillUrl").value.trim();
+  } else if (type === "search") {
+    content = document.getElementById("distillContent").value.trim();
+  } else {
+    content = document.getElementById("distillContent").value.trim();
+  }
+  if (!content) return;
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = "Distilling...";
+  document.getElementById("distillResult").textContent = "Working...";
+
+  try {
+    const resp = await fetch("/api/character/distill", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, content }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById("distillResult").textContent =
+        "Created: " + data.card.name + " | Saved! Refresh character list.";
+      loadCharacters();
+    } else {
+      document.getElementById("distillResult").textContent = "Error: " + JSON.stringify(data);
+    }
+  } catch(e) {
+    document.getElementById("distillResult").textContent = "Error: " + e.message;
+  }
+  btn.disabled = false;
+  btn.textContent = "Distill";
+}
+
+connect();
+</script>
+</body>
+</html>
